@@ -4,13 +4,15 @@ import { useRouter } from 'vue-router';
 import StatBadge from '../components/common/StatBadge.vue';
 import SiteMap from '../components/common/SiteMap.vue';
 import FilterBar from '../components/common/FilterBar.vue';
+import RecoveryInbox from '../components/common/RecoveryInbox.vue';
 import { useSiteFilter } from '../hooks/useSiteFilter';
 import { useRingStore } from '../stores/ringStore';
 import { useSiteStore } from '../stores/siteStore';
 import { useMeasureStore } from '../stores/measureStore';
 import { useSessionStore } from '../stores/sessionStore';
-import { HABITATS, type BirdSite } from '../types/bird-site';
-import { recaptureRate, speciesCount, statusBreakdown } from '../utils/stats';
+import { useRecoveryStore } from '../stores/recoveryStore';
+import { HABITATS } from '../types/bird-site';
+import { recaptureRate, speciesCount, statusBreakdown, recoverySummary } from '../utils/stats';
 import { sitesByHabitat } from '../utils/geo';
 
 const router = useRouter();
@@ -18,6 +20,7 @@ const ringStore = useRingStore();
 const siteStore = useSiteStore();
 const measureStore = useMeasureStore();
 const sessionStore = useSessionStore();
+const recoveryStore = useRecoveryStore();
 const filter = useSiteFilter();
 
 const visibleSites = computed(() => filter.apply(siteStore.sites, sessionStore.sessions));
@@ -25,6 +28,7 @@ const breakdown = computed(() => statusBreakdown(ringStore.rings));
 const speciesList = computed(() => speciesCount(ringStore.rings));
 const habitatStats = computed(() => sitesByHabitat(siteStore.sites));
 const recent = computed(() => ringStore.rings.slice(0, 6));
+const recovery = computed(() => recoverySummary(recoveryStore.reports, ringStore.rings));
 const siteNameOf = (siteId: string) => siteStore.siteName(siteId);
 
 /** SiteMap 选中点位（emit 回传点位 id）→ 用点位编号过滤鸟点列表与地图 */
@@ -50,14 +54,31 @@ function selectSite(siteId: string) {
         <StatBadge label="鸟种数" :value="speciesList.length" unit="种" status="success" />
       </el-col>
       <el-col :xs="12" :md="6">
-        <StatBadge label="初捕 / 重捕 / 回收" :value="`${breakdown.初捕} / ${breakdown.重捕} / ${breakdown.回收}`" />
+        <StatBadge label="初捕 / 重捕 / 本站回收" :value="`${breakdown.初捕} / ${breakdown.重捕} / ${breakdown.回收}`" hint="本站环志台账口径" />
       </el-col>
       <el-col :xs="12" :md="6">
         <StatBadge label="重捕率" :value="recaptureRate(ringStore.rings)" unit="%" status="warning" hint="重捕 / (初捕 + 重捕)" />
       </el-col>
     </el-row>
 
-    <el-row :gutter="16">
+    <el-row :gutter="12" class="stat-row">
+      <el-col :xs="12" :md="6">
+        <StatBadge label="中心通报已匹配" :value="recovery.matched" unit="只" status="danger" hint="回收地 / 回收日期认中心" />
+      </el-col>
+      <el-col :xs="12" :md="6">
+        <StatBadge label="挂起待人工处理" :value="recovery.pending" unit="条" status="warning" hint="本站无此环号，不凭空生成记录" />
+      </el-col>
+      <el-col :xs="12" :md="6">
+        <StatBadge label="本站环号未回收" :value="recovery.unrecovered" unit="个" status="success" hint="按环号去重，认本站台账" />
+      </el-col>
+      <el-col :xs="12" :md="6">
+        <StatBadge label="中心通报总数" :value="recovery.total" unit="条" />
+      </el-col>
+    </el-row>
+
+    <RecoveryInbox class="block" />
+
+    <el-row :gutter="16" class="board-body">
       <el-col :xs="24" :lg="16">
         <el-card shadow="never" class="block">
           <template #header>

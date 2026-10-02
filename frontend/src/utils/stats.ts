@@ -2,6 +2,8 @@ import type { MeasureDeviation, MeasureKey, Morphometrics } from '../types/morph
 import { MEASURE_FIELDS } from '../types/morphometrics';
 import type { RingRecord, RingStatus } from '../types/ring-record';
 import type { SessionStats, SurveySession } from '../types/session';
+import type { RecoveryReport } from '../types/recovery';
+import type { BirdSite } from '../types/bird-site';
 
 /** 常见环志鸟种目录（中文名 + 学名），供 SpeciesPicker 联想与自定义补充 */
 export const SPECIES_CATALOG: Array<{ cn: string; sci: string }> = [
@@ -143,4 +145,80 @@ export function deviationsOf(
 /** 是否存在需要提示的偏离项 */
 export function hasWarning(deviations: MeasureDeviation[]): boolean {
   return deviations.some((item) => item.level !== '正常');
+}
+
+/**
+ * 中心回收通报的统计台视图：按归属拼两边数据。
+ * - 环号 / 回收地 / 回收日期 / 批次：认中心通报（report 本身）
+ * - 鸟种 / 量度 / 鸟点：认本站台账（经 ringId 关联），没有就留空，绝不拿中心报文顶替
+ */
+export interface RecoveryView {
+  report: RecoveryReport;
+  ring?: RingRecord;
+  morph?: Morphometrics;
+  site?: BirdSite;
+}
+
+export interface RecoverySummary {
+  /** 中心通报总条数 */
+  total: number;
+  /** 已匹配本站环志记录（中心口径回收成立） */
+  matched: number;
+  /** 本站查无环号、挂起待人工处理 */
+  pending: number;
+  /** 本站环志中尚未被中心通报回收的去重环号个数（初捕/重捕均算，按环号去重） */
+  unrecovered: number;
+}
+
+/** 回收通报与本站台账的拼接视图（已匹配才补本站字段） */
+export function recoveryViews(
+  reports: RecoveryReport[],
+  rings: RingRecord[],
+  morphs: Morphometrics[],
+  sites: BirdSite[],
+): RecoveryView[] {
+  const ringById = new Map(rings.map((ring) => [ring.id, ring]));
+  const siteById = new Map(sites.map((site) => [site.id, site]));
+  const latestMorph = new Map<string, Morphometrics>();
+  morphs.forEach((morph) => {
+    const prev = latestMorph.get(morph.ringId);
+    if (!prev || morph.measuredAt > prev.measuredAt) {
+      latestMorph.set(morph.ringId, morph);
+    }
+  });
+
+  return reports.map((report) => {
+    const ring = report.ringId ? ringById.get(report.ringId) : undefined;
+    return {
+      report,
+      ring,
+      morph: ring ? latestMorph.get(ring.id) : undefined,
+      site: ring ? siteById.get(ring.siteId) : undefined,
+    };
+  });
+}
+
+/** 中心回收汇总；unrecovered 以本站环号去重，已被中心通报匹配回收的环号剔除 */
+export function recoverySummary(reports: RecoveryReport[], rings: RingRecord[]): RecoverySummary {
+  const recoveredRingNos = new Set(
+    reports
+      .filter((report) => report.status === '已匹配')
+      .map((report) => report.ringNo.trim().toLowerCase()),
+  );
+  const localRingNos = new Set(rings.map((ring) => ring.ringNo.trim().toLowerCase()));
+  let unrecovered = 0;
+  localRingNos.forEach((ringNo) => {
+    if (!recoveredRingNos.has(ringNo)) unrecovered += 1;
+  });
+  return {
+    total: reports.length,
+    matched: reports.filter((report) => report.status === '已匹配').length,
+    pending: reports.filter((report) => report.status === '待处理').length,
+    unrecovered,
+  };
+}
+
+/** 中心口径已回收鸟种计数（鸟种认本站台账），按计数降序 */
+export function recoveredSpeciesCount(views: RecoveryView[]): Array<{ speciesCn: string; speciesSci: string; count: number }> {
+  return speciesCount(views.map((view) => view.ring).filter((ring): ring is RingRecord => Boolean(ring)));
 }
