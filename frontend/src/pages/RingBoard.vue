@@ -9,23 +9,35 @@ import { useRingStore } from '../stores/ringStore';
 import { useSiteStore } from '../stores/siteStore';
 import { useMeasureStore } from '../stores/measureStore';
 import { useSessionStore } from '../stores/sessionStore';
+import { useNoticeStore } from '../stores/noticeStore';
 import { HABITATS, type BirdSite } from '../types/bird-site';
-import { recaptureRate, speciesCount, statusBreakdown } from '../utils/stats';
+import { recaptureRate, speciesCount, statusBreakdown, noticeBreakdown } from '../utils/stats';
 import { sitesByHabitat } from '../utils/geo';
+import { combineRecovery } from '../utils/recovery';
+import { formatDate } from '../utils/format';
 
 const router = useRouter();
 const ringStore = useRingStore();
 const siteStore = useSiteStore();
 const measureStore = useMeasureStore();
 const sessionStore = useSessionStore();
+const noticeStore = useNoticeStore();
 const filter = useSiteFilter();
 
 const visibleSites = computed(() => filter.apply(siteStore.sites, sessionStore.sessions));
 const breakdown = computed(() => statusBreakdown(ringStore.rings));
+const noticeStats = computed(() => noticeBreakdown(noticeStore.notices));
 const speciesList = computed(() => speciesCount(ringStore.rings));
 const habitatStats = computed(() => sitesByHabitat(siteStore.sites));
 const recent = computed(() => ringStore.rings.slice(0, 6));
 const siteNameOf = (siteId: string) => siteStore.siteName(siteId);
+
+/** 最近回收：已匹配通报按归属合并（鸟种 / 鸟点认本站，回收地 / 回收日期认中心） */
+const recentRecoveries = computed(() =>
+  noticeStore.matchedNotices
+    .slice(0, 6)
+    .map((notice) => combineRecovery(notice, ringStore.rings, measureStore.morphs, siteNameOf)),
+);
 
 /** SiteMap 选中点位（emit 回传点位 id）→ 用点位编号过滤鸟点列表与地图 */
 function selectSite(siteId: string) {
@@ -117,6 +129,43 @@ function selectSite(siteId: string) {
             <span class="recent-site">{{ siteNameOf(record.siteId) }}</span>
           </div>
         </el-card>
+
+        <el-card shadow="never" class="block">
+          <template #header>
+            <div class="card-head">
+              <span>回收通报</span>
+              <el-button link type="primary" @click="router.push('/notices')">去处理</el-button>
+            </div>
+          </template>
+          <div class="notice-summary">
+            <div class="notice-stat">
+              <span class="notice-num" style="color: #c77700">{{ noticeStats.pending }}</span>
+              <span class="notice-label">挂起（等人工处理）</span>
+            </div>
+            <div class="notice-stat">
+              <span class="notice-num" style="color: #2f7d32">{{ noticeStats.matched }}</span>
+              <span class="notice-label">已匹配本站台账</span>
+            </div>
+          </div>
+          <p class="notice-note">
+            通报只带环号 / 回收地 / 回收日期；鸟种 / 量度 / 鸟点以本站台账为准。环号本站没有就先挂着，不凭空生成记录。
+          </p>
+        </el-card>
+
+        <el-card v-if="recentRecoveries.length" shadow="never" class="block">
+          <template #header>
+            <div class="card-head">
+              <span>最近回收</span>
+              <span class="card-note">回收地 / 日期认中心，鸟种 / 鸟点认本站</span>
+            </div>
+          </template>
+          <div v-for="item in recentRecoveries" :key="item.notice.id" class="recent-row">
+            <el-tag size="small" type="danger" effect="plain">回收</el-tag>
+            <span class="recent-ring">{{ item.notice.ringNo }}</span>
+            <span class="recent-species">{{ item.speciesCn }}</span>
+            <span class="recent-site">{{ item.notice.recoverySite }} · {{ formatDate(item.notice.recoveryDate) }}</span>
+          </div>
+        </el-card>
       </el-col>
     </el-row>
   </div>
@@ -178,5 +227,31 @@ function selectSite(siteId: string) {
   margin-left: auto;
   color: #8a99a5;
   font-size: 12px;
+}
+.notice-summary {
+  display: flex;
+  gap: 24px;
+  padding: 4px 0;
+}
+.notice-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.notice-num {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.notice-label {
+  font-size: 12px;
+  color: #8a99a5;
+}
+.notice-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #8a99a5;
+  line-height: 1.6;
 }
 </style>

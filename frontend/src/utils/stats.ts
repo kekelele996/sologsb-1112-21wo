@@ -1,6 +1,7 @@
 import type { MeasureDeviation, MeasureKey, Morphometrics } from '../types/morphometrics';
 import { MEASURE_FIELDS } from '../types/morphometrics';
 import type { RingRecord, RingStatus } from '../types/ring-record';
+import type { RecoveryNotice } from '../types/recovery-notice';
 import type { SessionStats, SurveySession } from '../types/session';
 
 /** 常见环志鸟种目录（中文名 + 学名），供 SpeciesPicker 联想与自定义补充 */
@@ -143,4 +144,12 @@ export function deviationsOf(
 /** 是否存在需要提示的偏离项 */
 export function hasWarning(deviations: MeasureDeviation[]): boolean {
   return deviations.some((item) => item.level !== '正常');
+}
+
+/** 回收通报处理状态分布（中心通报视角：挂起 / 已匹配） */
+export function noticeBreakdown(notices: RecoveryNotice[]): { pending: number; matched: number } {
+  return {
+    pending: notices.filter((notice) => notice.status === 'pending').length,
+    matched: notices.filter((notice) => notice.status === 'matched').length,
+  };
 }

@@ -3,6 +3,7 @@ import type { BirdSite } from '../types/bird-site';
 import type { SurveySession } from '../types/session';
 import type { RingRecord } from '../types/ring-record';
 import type { Morphometrics } from '../types/morphometrics';
+import type { RecoveryNotice } from '../types/recovery-notice';
 import { SPECIES_CATALOG } from './stats';
 
 const DAY = 86_400_000;
@@ -126,23 +127,51 @@ export const SEED_MORPHS: Morphometrics[] = [
 ];
 
 /** 首次打开（表内无数据）时写入示例数据；已有数据则不动 */
+export const SEED_NOTICES: RecoveryNotice[] = [
+  // 已匹配：环号 A-10099 在本站台账有底档（ring-017），回收地 / 回收日期认中心通报
+  {
+    id: 'notice-001',
+    ringNo: 'A-10099',
+    recoverySite: '黄河口南岸',
+    recoveryDate: new Date(Date.now() - 2 * DAY).toISOString(),
+    status: 'matched',
+    matchedRingId: 'ring-017',
+    receivedAt: new Date(Date.now() - 2 * DAY).toISOString(),
+    retryCount: 0,
+  },
+  // 挂起：环号 B-99999 本站台账没有，先挂着等人工处理，不凭空生成记录
+  {
+    id: 'notice-002',
+    ringNo: 'B-99999',
+    recoverySite: '辽东湾北岸',
+    recoveryDate: new Date(Date.now() - 5 * DAY).toISOString(),
+    status: 'pending',
+    failReason: '本站台账无此环号，待人工处理',
+    receivedAt: new Date(Date.now() - 5 * DAY).toISOString(),
+    retryCount: 0,
+  },
+];
+
+/** 首次打开（表内无数据）时写入示例数据；已有数据则不动 */
 export async function seedIfEmpty(): Promise<void> {
   const flag = await db.meta.get('seeded');
   if (flag) {
     return;
   }
-  const [ringCount, morphCount, siteCount, sessionCount] = await Promise.all([
+  const [ringCount, morphCount, siteCount, sessionCount, noticeCount] = await Promise.all([
     db.rings.count(),
     db.morphs.count(),
     db.sites.count(),
     db.sessions.count(),
+    db.notices.count(),
   ]);
 
-  await db.transaction('rw', db.rings, db.morphs, db.sites, db.sessions, db.meta, async () => {
+  await db.transaction('rw', [db.rings, db.morphs, db.sites, db.sessions, db.notices, db.meta], async () => {
     if (siteCount === 0) await db.sites.bulkPut(SEED_SITES);
     if (sessionCount === 0) await db.sessions.bulkPut(SEED_SESSIONS);
     if (ringCount === 0) await db.rings.bulkPut(SEED_RINGS);
     if (morphCount === 0) await db.morphs.bulkPut(SEED_MORPHS);
+    if (noticeCount === 0) await db.notices.bulkPut(SEED_NOTICES);
     await db.meta.put({ key: 'seeded', value: new Date().toISOString() });
   });
 }

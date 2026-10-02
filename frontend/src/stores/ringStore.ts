@@ -99,5 +99,18 @@ export const useRingStore = defineStore('ring', {
       await db.rings.delete(id);
       this.rings = this.rings.filter((record) => record.id !== id);
     },
+
+    /**
+     * 标记为回收：由中心通报匹配后调用。
+     * 本站侧只改状态，回收地 / 回收日期仍以中心通报为准（不写进环志记录）。
+     * 已是「回收」或记录不存在时直接跳过。
+     */
+    async markRecovered(id: string) {
+      const current = this.rings.find((record) => record.id === id);
+      if (!current || current.status === '回收') return;
+      const next: RingRecord = { ...current, status: '回收' };
+      await db.rings.put(toPlain(next));
+      this.rings = this.rings.map((record) => (record.id === id ? next : record));
+    },
   },
 });

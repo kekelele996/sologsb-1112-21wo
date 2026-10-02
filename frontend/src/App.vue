@@ -9,6 +9,7 @@ import { useRingStore } from './stores/ringStore';
 import { useMeasureStore } from './stores/measureStore';
 import { useSiteStore } from './stores/siteStore';
 import { useSessionStore } from './stores/sessionStore';
+import { useNoticeStore } from './stores/noticeStore';
 import { useAmap } from './hooks/useAmap';
 
 const route = useRoute();
@@ -16,6 +17,7 @@ const ringStore = useRingStore();
 const measureStore = useMeasureStore();
 const siteStore = useSiteStore();
 const sessionStore = useSessionStore();
+const noticeStore = useNoticeStore();
 const amap = useAmap();
 const ready = ref(false);
 
@@ -28,7 +30,13 @@ onMounted(async () => {
   }
   try {
     await seedIfEmpty();
-    await Promise.all([ringStore.hydrate(), measureStore.hydrate(), siteStore.hydrate(), sessionStore.hydrate()]);
+    await Promise.all([
+      ringStore.hydrate(),
+      measureStore.hydrate(),
+      siteStore.hydrate(),
+      sessionStore.hydrate(),
+      noticeStore.hydrate(),
+    ]);
   } catch (error) {
     ElMessage.error(`本地数据装载失败：${(error as Error).message}`);
   } finally {
@@ -56,6 +64,7 @@ async function handleExport() {
         <el-menu-item index="/measure">量度测量</el-menu-item>
         <el-menu-item index="/sites">鸟点台账</el-menu-item>
         <el-menu-item index="/sessions">调查批次</el-menu-item>
+        <el-menu-item index="/notices">回收通报</el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>
